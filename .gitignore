@@ -1,0 +1,3 @@
+out/
+*.war
+.idea/workspace.xml
