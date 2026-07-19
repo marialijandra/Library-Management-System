@@ -42,7 +42,10 @@ function fetchBorrowers() {
 function fetchTransactionBooks() {
     return fetch(TRANSACTION_SERVLET + '?action=books')
         .then(function (res) { return res.json(); })
-        .then(function (data) { transactionBooks = data; })
+        .then(function (data) {
+            transactionBooks = data;
+            books = data;
+        })
         .catch(function (err) {
             console.error('Failed to load books for transactions:', err);
         });
@@ -112,7 +115,7 @@ function searchBooks() {
 }
 
 function openEditBookModal(bookId) {
-    var book = books.find(function (b) { return b.id === bookId; });
+    var book = books.find(function (b) { return b.id == bookId; });
     if (!book) return;
     editingBookId = bookId;
 
@@ -130,22 +133,65 @@ function closeEditBookModal() {
 }
 
 function saveEditedBook() {
-    var book = books.find(function (b) { return b.id === editingBookId; });
+    var book = books.find(function (b) { return b.id == editingBookId; });
     if (!book) return;
 
-    book.title = document.getElementById('editBookTitle').value.trim() || book.title;
-    book.description = document.getElementById('editBookDescription').value.trim();
-    book.quantity = parseInt(document.getElementById('editBookQuantity').value, 10) || 0;
-    book.image = document.getElementById('editBookImage').value.trim();
+    var title = document.getElementById('editBookTitle').value.trim() || book.title;
+    var description = document.getElementById('editBookDescription').value.trim();
+    var quantity = parseInt(document.getElementById('editBookQuantity').value, 10) || 0;
+    var image = document.getElementById('editBookImage').value.trim();
 
-    closeEditBookModal();
-    renderBooks();
+    var params = new URLSearchParams();
+    params.append('id', editingBookId);
+    params.append('title', title);
+    params.append('description', description);
+    params.append('quantity', quantity);
+    params.append('imageUrl', image);
+
+    fetch('../books?action=update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (!data.success) {
+            alert(data.message || 'Failed to save edited book.');
+            return;
+        }
+        closeEditBookModal();
+        fetchTransactionBooks().then(function () {
+            renderBooks();
+            renderDashboard();
+        });
+    })
+    .catch(function (err) {
+        console.error('Failed to save edited book:', err);
+        alert('Failed to save edited book. Please try again.');
+    });
 }
 
 function deleteBook(bookId) {
     if (!confirm('Delete this book from the catalog?')) return;
-    books = books.filter(function (b) { return b.id !== bookId; });
-    renderBooks();
+    
+    fetch('../books?action=delete&id=' + bookId, {
+        method: 'POST'
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (!data.success) {
+            alert(data.message || 'Failed to delete book.');
+            return;
+        }
+        fetchTransactionBooks().then(function () {
+            renderBooks();
+            renderDashboard();
+        });
+    })
+    .catch(function (err) {
+        console.error('Failed to delete book:', err);
+        alert('Failed to delete book. Please try again.');
+    });
 }
 
 function deleteBookFromModal() {
@@ -200,6 +246,8 @@ function updateRemoveButtons() {
 
 function saveNewBooks() {
     var blocks = document.querySelectorAll('#addBookEntries .book-entry-block');
+    var promises = [];
+
     blocks.forEach(function (block) {
         var idx = block.id.split('-')[1];
         var title = document.getElementById('newBookTitle-' + idx).value.trim();
@@ -208,12 +256,43 @@ function saveNewBooks() {
         var quantity = parseInt(document.getElementById('newBookQuantity-' + idx).value, 10) || 0;
         var image = document.getElementById('newBookImage-' + idx).value.trim();
 
-        var nextId = books.length ? Math.max.apply(null, books.map(function (b) { return b.id; })) + 1 : 1;
-        books.push({ id: nextId, title: title, description: description, quantity: quantity, image: image });
+        var params = new URLSearchParams();
+        params.append('title', title);
+        params.append('description', description);
+        params.append('quantity', quantity);
+        params.append('imageUrl', image);
+
+        var p = fetch('../books?action=insert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (!data.success) {
+                alert(data.message || ('Failed to add book: ' + title));
+                throw new Error(data.message || ('Failed to add book: ' + title));
+            }
+        });
+        promises.push(p);
     });
 
-    closeAddBookModal();
-    renderBooks();
+    if (promises.length === 0) return;
+
+    Promise.all(promises).then(function () {
+        closeAddBookModal();
+        fetchTransactionBooks().then(function () {
+            renderBooks();
+            renderDashboard();
+        });
+    }).catch(function (err) {
+        console.error('Failed to save new books:', err);
+        // Refresh the list of books in the dashboard in case some of the entries succeeded
+        fetchTransactionBooks().then(function () {
+            renderBooks();
+            renderDashboard();
+        });
+    });
 }
 
 function renderBorrowers(filter) {
@@ -624,7 +703,9 @@ function logoutLibrarian() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    renderBooks();
     updateGreeting();
-    fetchBorrowers(); // loads real data from TransactionServlet, then renders the borrowers table + dashboard
+    fetchTransactionBooks().then(function () {
+        renderBooks();
+        fetchBorrowers();
+    });
 });

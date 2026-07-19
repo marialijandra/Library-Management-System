@@ -186,6 +186,8 @@ public class TransactionServlet extends HttpServlet {
             sb.append("{")
               .append("\"id\":").append(JsonUtil.quote(b.getId())).append(",")
               .append("\"title\":").append(JsonUtil.quote(b.getTitle())).append(",")
+              .append("\"description\":").append(JsonUtil.quote(b.getDescription())).append(",")
+              .append("\"image\":").append(JsonUtil.quote(b.getImageUrl() == null ? "" : b.getImageUrl())).append(",")
               .append("\"quantity\":").append(b.getQuantity())
               .append("}");
         }
