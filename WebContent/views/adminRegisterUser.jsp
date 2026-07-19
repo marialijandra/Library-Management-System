@@ -1,4 +1,12 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%
+    // Without this, the register-a-user form (and the ability to submit it)
+    // was reachable by just opening this URL directly, no login required.
+    if (!"admin".equals(session.getAttribute("role"))) {
+        response.sendRedirect(request.getContextPath() + "/views/login.jsp");
+        return;
+    }
+%>
 <!DOCTYPE html>
 <html>
 <head>

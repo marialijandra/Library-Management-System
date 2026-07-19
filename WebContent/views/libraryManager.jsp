@@ -2,6 +2,16 @@
 <%@ page import="java.sql.*" %>
 <%@ page import="com.iacademy.library.util.DBUtil" %>
 <%
+    // Gate this page the same way TransactionServlet gates its data calls -
+    // otherwise the dashboard/books/transaction UI is fully browsable by
+    // anyone who knows the URL, even though the data underneath it is protected.
+    Object sessionRole = session.getAttribute("role");
+    if (!"librarian".equals(sessionRole) && !"admin".equals(sessionRole)) {
+        response.sendRedirect(request.getContextPath() + "/views/login.jsp");
+        return;
+    }
+%>
+<%
     String email = (String) session.getAttribute("email");
     String firstName = "Librarian";
     String initial = "L";

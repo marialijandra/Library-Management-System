@@ -10,6 +10,7 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 @WebServlet("/register")
 public class RegisterServlet extends HttpServlet {
@@ -22,21 +23,37 @@ public class RegisterServlet extends HttpServlet {
     }
 
     /**
-     * Serves the adminRegisterUser.jsp form inside the views directory.
+     * Serves the adminRegisterUser.jsp form inside the views directory -
+     * only to an already-logged-in admin. (adminRegisterUser.jsp also checks
+     * this itself if opened directly, but checking here too means a stray
+     * direct hit on /register can't skip it.)
      */
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        // Pointing to adminRegisterUser.jsp inside the views directory
+        if (!isAdmin(request)) {
+            response.sendRedirect(request.getContextPath() + "/views/login.jsp");
+            return;
+        }
         request.getRequestDispatcher("/views/adminRegisterUser.jsp").forward(request, response);
     }
 
     /**
-     * Handles registration execution.
+     * Handles registration execution. Only an admin who is actually logged in
+     * (session role == "admin") may register anyone, of any role - there is
+     * no "no session yet" fallback. The very first admin account must come
+     * from the seed data in database_schema.sql, not from this endpoint.
      */
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+
+        if (!isAdmin(request)) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            JsonUtil.sendJsonResponse(response, false,
+                    "You must be logged in as an admin to register new users.", null);
+            return;
+        }
 
         String firstName = request.getParameter("firstName");
         String surname = request.getParameter("surname");
@@ -54,30 +71,20 @@ public class RegisterServlet extends HttpServlet {
             return;
         }
 
-        // Determine the creator role based on session (default to ADMIN if none found for testing/setup)
-        Role creatorRole = Role.ADMIN;
-        Object sessionRoleObj = request.getSession().getAttribute("role");
-        if (sessionRoleObj instanceof String) {
-            try {
-                creatorRole = Role.valueOf(((String) sessionRoleObj).toUpperCase());
-            } catch (IllegalArgumentException e) {
-                // Ignore and fall back to default
-            }
-        }
-
         if (firstName == null || surname == null || email == null || password == null || targetRole == null) {
             JsonUtil.sendJsonResponse(response, false, "Missing form data parameters.", null);
             return;
         }
 
-        // Executes registration logic
+        // Executes registration logic - creatorRole is always ADMIN here since
+        // isAdmin(request) already confirmed that above.
         boolean isSuccess = userService.registerUser(
                 firstName,
                 surname,
                 email,
                 password,
                 targetRole,
-                creatorRole
+                Role.ADMIN
         );
 
         if (isSuccess) {
@@ -90,5 +97,10 @@ public class RegisterServlet extends HttpServlet {
                     null
             );
         }
+    }
+
+    private boolean isAdmin(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        return session != null && "admin".equals(session.getAttribute("role"));
     }
 }

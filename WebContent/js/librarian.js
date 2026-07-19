@@ -26,9 +26,26 @@ let activeBorrowerLoanIds = [];   // transactionId for each row rendered in #bor
 // has to go "up" one level, the same way the JSP does for ../images, ../css, etc.
 const TRANSACTION_SERVLET = '../TransactionServlet';
 
+// Shared response handler for all TransactionServlet calls below. Without this,
+// a 403 (expired/missing session) still has a valid JSON body - {"error":"..."}
+// - so res.json() would succeed and hand callers an object where they expect
+// an array (borrowers/transactionBooks), crashing renderBorrowers()/etc. with
+// "borrowers.filter is not a function" instead of showing anything useful.
+function handleTransactionResponse(res) {
+    if (res.status === 401 || res.status === 403) {
+        alert('Your session has expired or you are not logged in. Please log in again.');
+        window.location.href = '../views/login.jsp';
+        return new Promise(function () {}); // navigating away - let this hang, don't resolve/reject
+    }
+    if (!res.ok) {
+        throw new Error('Request failed with status ' + res.status);
+    }
+    return res.json();
+}
+
 function fetchBorrowers() {
     return fetch(TRANSACTION_SERVLET + '?action=list')
-        .then(function (res) { return res.json(); })
+        .then(handleTransactionResponse)
         .then(function (data) {
             borrowers = data;
             renderBorrowers();
@@ -41,7 +58,7 @@ function fetchBorrowers() {
 
 function fetchTransactionBooks() {
     return fetch(TRANSACTION_SERVLET + '?action=books')
-        .then(function (res) { return res.json(); })
+        .then(handleTransactionResponse)
         .then(function (data) {
             transactionBooks = data;
             books = data;
@@ -56,7 +73,7 @@ function postTransactionAction(params) {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params.toString()
-    }).then(function (res) { return res.json(); });
+    }).then(handleTransactionResponse);
 }
 
 function switchTab(tabName) {
@@ -698,7 +715,10 @@ function renderDashboard() {
 
 function logoutLibrarian() {
     if (confirm('Log out of the librarian dashboard?')) {
-        window.location.href = '../views/login.jsp';
+        // Hits LogoutServlet, which calls session.invalidate() server-side
+        // before redirecting to login.jsp - a plain client redirect here
+        // would leave the old session (and its role) still valid.
+        window.location.href = '../logout';
     }
 }
 
