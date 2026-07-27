@@ -15,7 +15,9 @@
     <div class="auth-card" id="signupCard" style="max-width:480px;">
 
         <div id="signupFormView">
-            <a href="../index.jsp"><img class="auth-logo" src="../images/logofooter.png" alt="iACADEMY"></a>
+            <a href="${pageContext.request.contextPath}/index.jsp">
+                <img class="auth-logo" src="${pageContext.request.contextPath}/images/logofooter.png" alt="iACADEMY">
+            </a>
             <h1>Create Account</h1>
             <p class="subtitle">Join iACADEMY Library to save authors and contribute.</p>
 
@@ -66,7 +68,7 @@
                     <path d="M4 12.5L9 17.5L20 6.5" stroke="#22356C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </div>
-            <h1 style="margin-bottom:12px;">Account Created</h1>
+            <h1 style="margin-bottom:12px;">Administration</h1>
             <p class="subtitle" style="margin-bottom:32px; line-height:1.6;">
                 You will receive an email shortly to confirm your account.<br>
                 Please check your inbox to complete the setup.
