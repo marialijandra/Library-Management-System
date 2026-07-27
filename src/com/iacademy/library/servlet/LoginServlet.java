@@ -66,7 +66,7 @@ public class LoginServlet extends HttpServlet {
                 session.setAttribute("email", email);
 
                 // Redirects to RegisterServlet mapping (which points to views/adminRegisterUser.jsp)
-                JsonUtil.sendJsonResponse(response, true, null, "register");
+                JsonUtil.sendJsonResponse(response, true, null, "views/adminRegisterUser.jsp");
 
             } else if (role == Role.LIBRARIAN) {
                 HttpSession session = request.getSession(true);
