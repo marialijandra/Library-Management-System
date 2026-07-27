@@ -11,20 +11,70 @@ let books = [
     { id: 10, title: "The Odyssey", description: "An ancient epic following a hero's long journey home after war. A foundational work of Western literature.", quantity: 4, image: "" }
 ];
 
-let borrowers = [
-    { id: 1, firstName: "Eliah", surname: "Cruz", email: "eliah.cruz@iacademy.edu.ph",
-        loans: [ { bookId: 1, status: "borrowed" } ] },
-    { id: 2, firstName: "Renuel", surname: "Gonzalves", email: "renuel.gonzalves@iacademy.edu.ph",
-        loans: [ { bookId: 3, status: "returned" }, { bookId: 4, status: "borrowed" } ] },
-    { id: 3, firstName: "Lenard", surname: "Yu", email: "lenard.yu@iacademy.edu.ph",
-        loans: [ { bookId: 2, status: "borrowed" } ] },
-    { id: 4, firstName: "Liz", surname: "Cabeliza", email: "liz.cabeliza@iacademy.edu.ph",
-        loans: [ { bookId: 5, status: "returned" } ] }
-];
+// Transaction tab data now comes live from TransactionServlet (see fetchBorrowers()
+// / fetchTransactionBooks() below) instead of being mocked here.
+let borrowers = [];
+let transactionBooks = []; // { id, title, quantity } - live from the DB, used for the "select a book" dropdowns
 
 let editingBookId = null;
 let newBookEntryCount = 0;
-let activeBorrowerId = null;
+let activeBorrowerId = null;      // userId (string) of the borrower currently open in the modal
+let activeBorrowerLoanIds = [];   // transactionId for each row rendered in #borrowerLoanRows, in order
+
+// librarian.js is loaded from a page under /views/ (e.g. .../views/libraryManager.jsp),
+// but TransactionServlet is mapped at the app root, not under /views/. So the URL
+// has to go "up" one level, the same way the JSP does for ../images, ../css, etc.
+const TRANSACTION_SERVLET = '../TransactionServlet';
+
+// Shared response handler for all TransactionServlet calls below. Without this,
+// a 403 (expired/missing session) still has a valid JSON body - {"error":"..."}
+// - so res.json() would succeed and hand callers an object where they expect
+// an array (borrowers/transactionBooks), crashing renderBorrowers()/etc. with
+// "borrowers.filter is not a function" instead of showing anything useful.
+function handleTransactionResponse(res) {
+    if (res.status === 401 || res.status === 403) {
+        alert('Your session has expired or you are not logged in. Please log in again.');
+        window.location.href = '../views/login.jsp';
+        return new Promise(function () {}); // navigating away - let this hang, don't resolve/reject
+    }
+    if (!res.ok) {
+        throw new Error('Request failed with status ' + res.status);
+    }
+    return res.json();
+}
+
+function fetchBorrowers() {
+    return fetch(TRANSACTION_SERVLET + '?action=list')
+        .then(handleTransactionResponse)
+        .then(function (data) {
+            borrowers = data;
+            renderBorrowers();
+            renderDashboard();
+        })
+        .catch(function (err) {
+            console.error('Failed to load borrowers:', err);
+        });
+}
+
+function fetchTransactionBooks() {
+    return fetch(TRANSACTION_SERVLET + '?action=books')
+        .then(handleTransactionResponse)
+        .then(function (data) {
+            transactionBooks = data;
+            books = data;
+        })
+        .catch(function (err) {
+            console.error('Failed to load books for transactions:', err);
+        });
+}
+
+function postTransactionAction(params) {
+    return fetch(TRANSACTION_SERVLET, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    }).then(handleTransactionResponse);
+}
 
 function switchTab(tabName) {
     document.querySelectorAll('.tab-view').forEach(function (el) { el.classList.remove('active'); });
