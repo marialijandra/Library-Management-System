@@ -1,4 +1,47 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ page import="java.sql.*" %>
+<%@ page import="com.iacademy.library.util.DBUtil" %>
+<%
+    // Gate this page the same way TransactionServlet gates its data calls -
+    // otherwise the dashboard/books/transaction UI is fully browsable by
+    // anyone who knows the URL, even though the data underneath it is protected.
+    Object sessionRole = session.getAttribute("role");
+    if (!"librarian".equals(sessionRole) && !"admin".equals(sessionRole)) {
+        response.sendRedirect(request.getContextPath() + "/views/login.jsp");
+        return;
+    }
+%>
+<%
+    String email = (String) session.getAttribute("email");
+    String firstName = "Librarian";
+    String initial = "L";
+    Connection conn = null;
+    PreparedStatement stmt = null;
+    ResultSet rs = null;
+    try {
+        conn = DBUtil.getConnection();
+        if (email != null) {
+            stmt = conn.prepareStatement("SELECT first_name FROM users WHERE email = ?");
+            stmt.setString(1, email);
+        } else {
+            // Default to the first librarian user in the database if no one is logged in (for dev/testing)
+            stmt = conn.prepareStatement("SELECT first_name FROM users WHERE role = 'librarian' LIMIT 1");
+        }
+        rs = stmt.executeQuery();
+        if (rs.next()) {
+            firstName = rs.getString("first_name");
+            if (firstName != null && !firstName.isEmpty()) {
+                initial = firstName.substring(0, 1).toUpperCase();
+            }
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    } finally {
+        if (rs != null) try { rs.close(); } catch (SQLException e) {}
+        if (stmt != null) try { stmt.close(); } catch (SQLException e) {}
+        if (conn != null) try { conn.close(); } catch (SQLException e) {}
+    }
+%>
 <!DOCTYPE html>
 <html>
 <head>
@@ -49,9 +92,9 @@
 
                 <div class="dash-welcome-row">
                     <div class="dash-welcome">
-                        <div class="avatar-lg">M</div>
+                        <div class="avatar-lg"><%= initial %></div>
                         <div>
-                            <h1 id="greetingText">Good day, Maria!</h1>
+                            <h1 id="greetingText">Good day, <%= firstName %>!</h1>
                             <p>Library Manager</p>
                         </div>
                     </div>
@@ -286,6 +329,9 @@
     </div>
 </div>
 
+<script>
+    var librarianName = "<%= firstName %>";
+</script>
 <script src="../js/librarian.js"></script>
 </body>
 </html>

@@ -132,7 +132,7 @@ function searchBooks() {
 }
 
 function openEditBookModal(bookId) {
-    var book = books.find(function (b) { return b.id === bookId; });
+    var book = books.find(function (b) { return b.id == bookId; });
     if (!book) return;
     editingBookId = bookId;
 
@@ -150,22 +150,65 @@ function closeEditBookModal() {
 }
 
 function saveEditedBook() {
-    var book = books.find(function (b) { return b.id === editingBookId; });
+    var book = books.find(function (b) { return b.id == editingBookId; });
     if (!book) return;
 
-    book.title = document.getElementById('editBookTitle').value.trim() || book.title;
-    book.description = document.getElementById('editBookDescription').value.trim();
-    book.quantity = parseInt(document.getElementById('editBookQuantity').value, 10) || 0;
-    book.image = document.getElementById('editBookImage').value.trim();
+    var title = document.getElementById('editBookTitle').value.trim() || book.title;
+    var description = document.getElementById('editBookDescription').value.trim();
+    var quantity = parseInt(document.getElementById('editBookQuantity').value, 10) || 0;
+    var image = document.getElementById('editBookImage').value.trim();
 
-    closeEditBookModal();
-    renderBooks();
+    var params = new URLSearchParams();
+    params.append('id', editingBookId);
+    params.append('title', title);
+    params.append('description', description);
+    params.append('quantity', quantity);
+    params.append('imageUrl', image);
+
+    fetch('../books?action=update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (!data.success) {
+            alert(data.message || 'Failed to save edited book.');
+            return;
+        }
+        closeEditBookModal();
+        fetchTransactionBooks().then(function () {
+            renderBooks();
+            renderDashboard();
+        });
+    })
+    .catch(function (err) {
+        console.error('Failed to save edited book:', err);
+        alert('Failed to save edited book. Please try again.');
+    });
 }
 
 function deleteBook(bookId) {
     if (!confirm('Delete this book from the catalog?')) return;
-    books = books.filter(function (b) { return b.id !== bookId; });
-    renderBooks();
+
+    fetch('../books?action=delete&id=' + bookId, {
+        method: 'POST'
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (!data.success) {
+            alert(data.message || 'Failed to delete book.');
+            return;
+        }
+        fetchTransactionBooks().then(function () {
+            renderBooks();
+            renderDashboard();
+        });
+    })
+    .catch(function (err) {
+        console.error('Failed to delete book:', err);
+        alert('Failed to delete book. Please try again.');
+    });
 }
 
 function deleteBookFromModal() {
@@ -220,6 +263,8 @@ function updateRemoveButtons() {
 
 function saveNewBooks() {
     var blocks = document.querySelectorAll('#addBookEntries .book-entry-block');
+    var promises = [];
+
     blocks.forEach(function (block) {
         var idx = block.id.split('-')[1];
         var title = document.getElementById('newBookTitle-' + idx).value.trim();
@@ -228,12 +273,43 @@ function saveNewBooks() {
         var quantity = parseInt(document.getElementById('newBookQuantity-' + idx).value, 10) || 0;
         var image = document.getElementById('newBookImage-' + idx).value.trim();
 
-        var nextId = books.length ? Math.max.apply(null, books.map(function (b) { return b.id; })) + 1 : 1;
-        books.push({ id: nextId, title: title, description: description, quantity: quantity, image: image });
+        var params = new URLSearchParams();
+        params.append('title', title);
+        params.append('description', description);
+        params.append('quantity', quantity);
+        params.append('imageUrl', image);
+
+        var p = fetch('../books?action=insert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (!data.success) {
+                alert(data.message || ('Failed to add book: ' + title));
+                throw new Error(data.message || ('Failed to add book: ' + title));
+            }
+        });
+        promises.push(p);
     });
 
-    closeAddBookModal();
-    renderBooks();
+    if (promises.length === 0) return;
+
+    Promise.all(promises).then(function () {
+        closeAddBookModal();
+        fetchTransactionBooks().then(function () {
+            renderBooks();
+            renderDashboard();
+        });
+    }).catch(function (err) {
+        console.error('Failed to save new books:', err);
+        // Refresh the list of books in the dashboard in case some of the entries succeeded
+        fetchTransactionBooks().then(function () {
+            renderBooks();
+            renderDashboard();
+        });
+    });
 }
 
 function renderBorrowers(filter) {
@@ -247,7 +323,7 @@ function renderBorrowers(filter) {
     }).forEach(function (p) {
         var tr = document.createElement('tr');
         tr.className = 'clickable';
-        tr.onclick = function () { openBorrowerModal(p.id); };
+        tr.onclick = function () { openBorrowerModal(p.userId); };
 
         var stillOut = p.loans.filter(function (l) { return l.status === 'borrowed'; }).length;
         var statusHtml = stillOut > 0
@@ -270,34 +346,39 @@ function searchBorrowers() {
 
 var borrowerNewBookRowCount = 0;
 
-function openBorrowerModal(borrowerId) {
-    var p = borrowers.find(function (b) { return b.id === borrowerId; });
+function openBorrowerModal(userId) {
+    var p = borrowers.find(function (b) { return b.userId === userId; });
     if (!p) return;
-    activeBorrowerId = borrowerId;
+    activeBorrowerId = userId;
 
     document.getElementById('borrowerModalName').textContent = p.firstName + ' ' + p.surname;
 
-    var rows = document.getElementById('borrowerLoanRows');
-    rows.innerHTML = '';
-    p.loans.forEach(function (loan, i) {
-        var book = books.find(function (b) { return b.id === loan.bookId; });
-        var title = book ? book.title : 'Unknown Book';
+    fetchTransactionBooks().then(function () {
+        var rows = document.getElementById('borrowerLoanRows');
+        rows.innerHTML = '';
+        activeBorrowerLoanIds = [];
 
-        var row = document.createElement('div');
-        row.className = 'status-select-row';
-        row.innerHTML =
-            '<span>' + escapeHtml(title) + '</span>' +
-            '<select id="loanStatus-' + i + '">' +
-            '<option value="borrowed"' + (loan.status === 'borrowed' ? ' selected' : '') + '>Still Borrowed</option>' +
-            '<option value="returned"' + (loan.status === 'returned' ? ' selected' : '') + '>Returned</option>' +
-            '</select>';
-        rows.appendChild(row);
+        p.loans.forEach(function (loan, i) {
+            activeBorrowerLoanIds.push(loan.transactionId);
+
+            var row = document.createElement('div');
+            row.className = 'status-select-row';
+            row.innerHTML =
+                '<span>' + escapeHtml(loan.bookTitle) + '</span>' +
+                '<select id="loanStatus-' + i + '">' +
+                '<option value="borrowed"' + (loan.status === 'borrowed' ? ' selected' : '') + '>Still Borrowed</option>' +
+                '<option value="returned"' + (loan.status === 'returned' ? ' selected' : '') + '>Returned</option>' +
+                '</select>' +
+                '<button type="button" class="icon-btn delete" title="Delete" ' +
+                'onclick="deleteLoanRow(\'' + loan.transactionId + '\')">&#128465;</button>';
+            rows.appendChild(row);
+        });
+
+        document.getElementById('borrowerNewBookRows').innerHTML = '';
+        borrowerNewBookRowCount = 0;
+
+        document.getElementById('borrowerModal').classList.add('open');
     });
-
-    document.getElementById('borrowerNewBookRows').innerHTML = '';
-    borrowerNewBookRowCount = 0;
-
-    document.getElementById('borrowerModal').classList.add('open');
 }
 
 function addBorrowerLoanBookRow() {
@@ -312,10 +393,11 @@ function addBorrowerLoanBookRow() {
     var select = document.createElement('select');
     select.id = 'borrowerNewBook-' + idx;
     select.innerHTML = '<option value="" disabled selected>Select a book</option>';
-    books.forEach(function (b) {
+    transactionBooks.forEach(function (b) {
         var opt = document.createElement('option');
         opt.value = b.id;
-        opt.textContent = b.title;
+        opt.textContent = b.title + (b.quantity <= 0 ? ' (none available)' : '');
+        if (b.quantity <= 0) opt.disabled = true;
         select.appendChild(opt);
     });
 
@@ -334,25 +416,62 @@ function addBorrowerLoanBookRow() {
 function closeBorrowerModal() {
     document.getElementById('borrowerModal').classList.remove('open');
     activeBorrowerId = null;
+    activeBorrowerLoanIds = [];
+}
+
+function deleteLoanRow(transactionId) {
+    if (!confirm('Delete this loan record? If the book is still borrowed, the copy will be returned to stock.')) return;
+
+    var params = new URLSearchParams();
+    params.append('action', 'deleteLoan');
+    params.append('transactionId', transactionId);
+
+    postTransactionAction(params).then(function (result) {
+        if (!result.success && result.messages && result.messages.length) {
+            alert(result.messages.join('\n'));
+        }
+        var reopenId = activeBorrowerId;
+        fetchBorrowers().then(function () {
+            closeBorrowerModal();
+            if (reopenId && borrowers.some(function (b) { return b.userId === reopenId; })) {
+                openBorrowerModal(reopenId);
+            }
+        });
+    }).catch(function (err) {
+        console.error(err);
+        alert('Something went wrong deleting that loan.');
+    });
 }
 
 function saveBorrowerStatuses() {
-    var p = borrowers.find(function (b) { return b.id === activeBorrowerId; });
-    if (!p) return;
+    if (!activeBorrowerId) return;
 
-    p.loans.forEach(function (loan, i) {
+    var params = new URLSearchParams();
+    params.append('action', 'updateBorrower');
+    params.append('userId', activeBorrowerId);
+
+    activeBorrowerLoanIds.forEach(function (transactionId, i) {
         var select = document.getElementById('loanStatus-' + i);
-        if (select) loan.status = select.value;
-    });
-
-    document.querySelectorAll('#borrowerNewBookRows select').forEach(function (sel) {
-        if (sel.value) {
-            p.loans.push({ bookId: parseInt(sel.value, 10), status: 'borrowed' });
+        if (select) {
+            params.append('transactionIds', transactionId);
+            params.append('statuses', select.value);
         }
     });
 
-    closeBorrowerModal();
-    renderBorrowers();
+    document.querySelectorAll('#borrowerNewBookRows select').forEach(function (sel) {
+        if (sel.value) params.append('newBookIds', sel.value);
+    });
+
+    postTransactionAction(params).then(function (result) {
+        if (result.messages && result.messages.length) {
+            alert(result.messages.join('\n'));
+        }
+        closeBorrowerModal();
+        fetchBorrowers();
+    }).catch(function (err) {
+        console.error(err);
+        alert('Something went wrong saving those changes.');
+    });
 }
 
 var newBorrowerBookRowCount = 0;
@@ -363,8 +482,11 @@ function openAddBorrowerModal() {
     document.getElementById('newBorrowerEmail').value = '';
     document.getElementById('newBorrowerBookRows').innerHTML = '';
     newBorrowerBookRowCount = 0;
-    addBorrowerBookRow();
-    document.getElementById('addBorrowerModal').classList.add('open');
+
+    fetchTransactionBooks().then(function () {
+        addBorrowerBookRow();
+        document.getElementById('addBorrowerModal').classList.add('open');
+    });
 }
 
 function closeAddBorrowerModal() {
@@ -383,10 +505,11 @@ function addBorrowerBookRow() {
     var select = document.createElement('select');
     select.id = 'newBorrowerBook-' + idx;
     select.innerHTML = '<option value="" disabled selected>Select a book</option>';
-    books.forEach(function (b) {
+    transactionBooks.forEach(function (b) {
         var opt = document.createElement('option');
         opt.value = b.id;
-        opt.textContent = b.title;
+        opt.textContent = b.title + (b.quantity <= 0 ? ' (none available)' : '');
+        if (b.quantity <= 0) opt.disabled = true;
         select.appendChild(opt);
     });
 
@@ -423,7 +546,7 @@ function saveNewBorrower() {
 
     var bookIds = [];
     document.querySelectorAll('#newBorrowerBookRows select').forEach(function (sel) {
-        if (sel.value) bookIds.push(parseInt(sel.value, 10));
+        if (sel.value) bookIds.push(sel.value);
     });
 
     if (!firstName || !surname || !email || bookIds.length === 0) {
@@ -431,25 +554,27 @@ function saveNewBorrower() {
         return;
     }
 
-    var newLoans = bookIds.map(function (id) { return { bookId: id, status: 'borrowed' }; });
+    var params = new URLSearchParams();
+    params.append('action', 'addBorrower');
+    params.append('firstName', firstName);
+    params.append('surname', surname);
+    params.append('email', email);
+    bookIds.forEach(function (id) { params.append('bookIds', id); });
 
-    var existing = borrowers.find(function (b) { return b.email.toLowerCase() === email.toLowerCase(); });
-
-    if (existing) {
-        existing.loans = existing.loans.concat(newLoans);
-    } else {
-        var nextId = borrowers.length ? Math.max.apply(null, borrowers.map(function (b) { return b.id; })) + 1 : 1;
-        borrowers.push({
-            id: nextId,
-            firstName: firstName,
-            surname: surname,
-            email: email,
-            loans: newLoans
-        });
-    }
-
-    closeAddBorrowerModal();
-    renderBorrowers();
+    postTransactionAction(params).then(function (result) {
+        if (!result.success) {
+            alert(result.messages && result.messages.length ? result.messages.join('\n') : 'Could not add borrower.');
+            return;
+        }
+        if (result.messages && result.messages.length) {
+            alert(result.messages.join('\n'));
+        }
+        closeAddBorrowerModal();
+        fetchBorrowers();
+    }).catch(function (err) {
+        console.error(err);
+        alert('Something went wrong adding that borrower.');
+    });
 }
 
 var donutChart = null;
@@ -469,7 +594,8 @@ function updateGreeting() {
     else if (hour < 18) timeOfDay = 'afternoon';
     else timeOfDay = 'evening';
 
-    document.getElementById('greetingText').textContent = 'Good ' + timeOfDay + ', Maria!';
+    var name = (typeof librarianName !== 'undefined') ? librarianName : 'Librarian';
+    document.getElementById('greetingText').textContent = 'Good ' + timeOfDay + ', ' + name + '!';
 }
 
 function setPeriod(period, el) {
@@ -589,13 +715,17 @@ function renderDashboard() {
 
 function logoutLibrarian() {
     if (confirm('Log out of the librarian dashboard?')) {
-        window.location.href = '../views/login.jsp';
+        // Hits LogoutServlet, which calls session.invalidate() server-side
+        // before redirecting to login.jsp - a plain client redirect here
+        // would leave the old session (and its role) still valid.
+        window.location.href = '../logout';
     }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    renderBooks();
-    renderBorrowers();
-    renderDashboard();
     updateGreeting();
+    fetchTransactionBooks().then(function () {
+        renderBooks();
+        fetchBorrowers();
+    });
 });
