@@ -17,17 +17,11 @@
         <h1>Library Access</h1>
         <p class="subtitle">Log in to continue exploring iACADEMY Library.</p>
 
-        <%-- Uncomment / feed from servlet once LoginServlet exists
-        <c:if test="${not empty errorMessage}">
-            <div class="auth-error">${errorMessage}</div>
-        </c:if>
-        --%>
-
-        <form action="LoginServlet" method="post">
-            <div class="form-group">
+        <form id="loginForm" onsubmit="handleLogin(event)">
+              <div class="form-group">
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" placeholder="you@iacademy.edu.ph" required>
-            </div>
+              </div>
 
             <div class="form-group">
                 <label for="password">Password</label>
@@ -35,20 +29,55 @@
             </div>
 
             <div class="form-options">
-                <label style="display:flex; align-items:center; gap:6px;">
-                    <input type="checkbox" name="remember" style="accent-color:#22356C;"> Remember me
-                </label>
-                <a href="forgotPassword.jsp">Forgot password?</a>
-            </div>
+                    <label style="display:flex; align-items:center; gap:6px;">
+                      <input type="checkbox" name="remember" style="accent-color:#22356C;"> Remember me
+                    </label>
+                    <a href="${pageContext.request.contextPath}/forgotPassword.jsp">Forgot password?</a>
+                  </div>
 
             <button type="submit" class="auth-submit">Log In</button>
         </form>
 
         <div class="auth-switch">
-            Don't have an account? <a href="signup.jsp">Sign up</a>
+            Don't have an account? <a href="${pageContext.request.contextPath}/views/signup.jsp">Sign up</a>
         </div>
     </div>
 </section>
+
+<script>
+  function handleLogin(event) {
+    event.preventDefault();
+
+    var form = document.getElementById('loginForm');
+    var formData = new FormData(form);
+    var params = new URLSearchParams(formData);
+
+    fetch('${pageContext.request.contextPath}/login', {
+      method: 'POST',
+      body: params,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Connection failed');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.success) {
+        window.location.href = '${pageContext.request.contextPath}/' + data.redirect;
+      } else {
+        alert(data.message);
+      }
+    })
+    .catch(error => {
+      console.error('Network Error:', error);
+      alert("An unexpected network error occurred while reaching the server.");
+    });
+  }
+</script>
 
 </body>
 </html>

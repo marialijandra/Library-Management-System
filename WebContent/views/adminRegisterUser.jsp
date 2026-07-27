@@ -80,7 +80,7 @@
             <h1 style="margin-bottom:12px;">User Registered</h1>
             <p class="subtitle" id="registerConfirmMessage" style="margin-bottom:32px; line-height:1.6;"></p>
             <button type="button" class="auth-submit" onclick="registerAnother()" style="margin-bottom:12px;">Register Another User</button>
-            <a href="../index.jsp" class="btn-outline" style="display:block; text-align:center; box-sizing:border-box; color:#22356C; border-color:#22356C;">Back to Home</a>
+            <a href="${pageContext.request.contextPath}/index.jsp" class="btn-outline" style="display:block; text-align:center; box-sizing:border-box; color:#22356C; border-color:#22356C;">Back to Home</a>
         </div>
 
     </div>
@@ -100,20 +100,48 @@
     }
 
     function showRegisterConfirmation(event) {
-        event.preventDefault();
-        var first = document.getElementById('firstName').value;
-        var surname = document.getElementById('surname').value;
-        var email = document.getElementById('email').value;
-        var role = document.getElementById('role').value;
-        var roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+            event.preventDefault();
 
-        document.getElementById('registerConfirmMessage').innerHTML =
-            first + ' ' + surname + ' has been registered as a <strong>' + roleLabel + '</strong>. ' +
-            'A confirmation email has been sent to ' + email + '.';
+            var form = document.getElementById('registerForm');
+            var formData = new FormData(form);
+            var params = new URLSearchParams(formData);
 
-        document.getElementById('registerFormView').style.display = 'none';
-        document.getElementById('registerConfirmView').style.display = 'block';
-    }
+            fetch('${pageContext.request.contextPath}/register', {
+                method: 'POST',
+                body: params,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    var first = document.getElementById('firstName').value;
+                    var surname = document.getElementById('surname').value;
+                    var email = document.getElementById('email').value;
+                    var role = document.getElementById('role').value;
+                    var roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+
+                    document.getElementById('registerConfirmMessage').innerHTML =
+                        first + ' ' + surname + ' has been registered as a <strong>' + roleLabel + '</strong>. ' +
+                        'A confirmation email has been sent to ' + email + '.';
+
+                    document.getElementById('registerFormView').style.display = 'none';
+                    document.getElementById('registerConfirmView').style.display = 'block';
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Network Error:', error);
+                alert("An unexpected network error occurred while reaching the server.");
+            });
+        }
 
     function registerAnother() {
         document.getElementById('registerForm').reset();
@@ -121,6 +149,5 @@
         document.getElementById('registerFormView').style.display = 'block';
     }
 </script>
-
 </body>
 </html>
