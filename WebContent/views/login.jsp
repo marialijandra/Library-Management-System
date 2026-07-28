@@ -18,10 +18,10 @@
         <p class="subtitle">Log in to continue exploring iACADEMY Library.</p>
 
         <form id="loginForm" onsubmit="handleLogin(event)">
-              <div class="form-group">
+            <div class="form-group">
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" placeholder="you@iacademy.edu.ph" required>
-              </div>
+            </div>
 
             <div class="form-group">
                 <label for="password">Password</label>
@@ -29,11 +29,11 @@
             </div>
 
             <div class="form-options">
-                    <label style="display:flex; align-items:center; gap:6px;">
-                      <input type="checkbox" name="remember" style="accent-color:#22356C;"> Remember me
-                    </label>
-                    <a href="${pageContext.request.contextPath}/forgotPassword.jsp">Forgot password?</a>
-                  </div>
+                <label style="display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" name="remember" style="accent-color:#22356C;"> Remember me
+                </label>
+                <a href="${pageContext.request.contextPath}/forgotPassword.jsp">Forgot password?</a>
+            </div>
 
             <button type="submit" class="auth-submit">Log In</button>
         </form>
@@ -45,38 +45,42 @@
 </section>
 
 <script>
-  function handleLogin(event) {
-    event.preventDefault();
+    function handleLogin(event) {
+        event.preventDefault();
 
-    var form = document.getElementById('loginForm');
-    var formData = new FormData(form);
-    var params = new URLSearchParams(formData);
+        var form = document.getElementById('loginForm');
+        var formData = new FormData(form);
+        var params = new URLSearchParams(formData);
 
-    fetch('${pageContext.request.contextPath}/login', {
-      method: 'POST',
-      body: params,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Connection failed');
-      }
-      return response.json();
-    })
-    .then(data => {
-      if (data.success) {
-        window.location.href = '${pageContext.request.contextPath}/' + data.redirect;
-      } else {
-        alert(data.message);
-      }
-    })
-    .catch(error => {
-      console.error('Network Error:', error);
-      alert("An unexpected network error occurred while reaching the server.");
-    });
-  }
+        // Get the accurate context path from JSP
+        var contextPath = "<%= request.getContextPath() %>";
+
+        fetch(contextPath + '/login', {
+            method: 'POST',
+            body: params,
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Connection failed');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Safe redirection using the validated context path
+                    window.location.href = contextPath + data.redirect;
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Network Error:', error);
+                alert("An unexpected network error occurred while reaching the server.");
+            });
+    }
 </script>
 
 </body>

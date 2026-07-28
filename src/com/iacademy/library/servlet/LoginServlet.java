@@ -29,7 +29,6 @@ public class LoginServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-
         // Pointing to login.jsp inside the views directory
         request.getRequestDispatcher("/views/login.jsp").forward(request, response);
     }
@@ -62,19 +61,21 @@ public class LoginServlet extends HttpServlet {
 
             } else if (role == Role.ADMIN) {
                 HttpSession session = request.getSession(true);
-                session.setAttribute("role", Role.ADMIN);
+                // Storing the role as "admin" (String) to match the check in adminRegisterUser.jsp
+                session.setAttribute("role", "admin");
                 session.setAttribute("email", email);
 
-                // Redirects to RegisterServlet mapping (which points to views/adminRegisterUser.jsp)
-                JsonUtil.sendJsonResponse(response, true, null, "views/adminRegisterUser.jsp");
+                // Added a leading slash. (If pointing to a RegisterServlet mapping instead, change to "/register")
+                JsonUtil.sendJsonResponse(response, true, null, "/views/adminRegisterUser.jsp");
 
             } else if (role == Role.LIBRARIAN) {
                 HttpSession session = request.getSession(true);
-                session.setAttribute("role", Role.LIBRARIAN);
+                // Storing the role as "librarian" (String) to match the check in libraryManager.jsp
+                session.setAttribute("role", "librarian");
                 session.setAttribute("email", email);
 
-                // Redirects directly to libraryManager.jsp inside the views directory
-                JsonUtil.sendJsonResponse(response, true, null, "views/libraryManager.jsp");
+                // Added a leading slash. (If pointing to a manager servlet instead, update here)
+                JsonUtil.sendJsonResponse(response, true, null, "/views/libraryManager.jsp");
             }
 
         } catch (SQLException e) {
